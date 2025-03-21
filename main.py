@@ -119,19 +119,49 @@ class WoWStructParser:
                 variable_name = match.group(1)
                 field_type = str(parsed_data[variable_name]) + "s"
             
-            try:
+            #try:
+            if not 'S' in field_type:
                 fmt = f"{endianess}{field_type}" 
                 field_size = struct.calcsize(fmt)
-            except struct.error:
-                print(f"Error calculating size for format: {fmt}")
-                return None
+            #except struct.error:
+             #   print(f"Error calculating size for format: {fmt}")
+              #  return None
             
-            if 's' in field_type:
-                field_value = struct.unpack_from(fmt, raw_data, offset)[0]
-            elif re.match(r'^\d+[A-Za-z]$', field_type):
-                field_value = struct.unpack_from(fmt, raw_data, offset)
-            else:
-                field_value = struct.unpack_from(fmt, raw_data, offset)[0]
+            try:
+                if 's' in field_type:
+                    field_value = struct.unpack_from(fmt, raw_data, offset)[0]
+                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                elif 'S' in field_type:
+                    print("unknown")
+                    data = raw_data[offset:].split(b'\x00')[0]
+                    length = len(data) + 1 # x00 i removed in split
+
+                    field_value = struct.unpack_from(f'{length}s', raw_data, offset)[0]
+                    field_size = length
+                    field_type = "s"
+                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                elif re.match(r'^\d+[A-Za-z]$', field_type):
+                    field_value = struct.unpack_from(fmt, raw_data, offset)
+                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                elif len(fmt) > 2: 
+                    field_value = struct.unpack_from(fmt, raw_data, offset)
+
+                    combined = 0
+
+                    for value in field_value:
+                        combined += value
+
+                    field_value = combined
+
+                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                else:
+                    field_value = struct.unpack_from(fmt, raw_data, offset)[0]
+                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+            except struct.error as e:
+                print(f'Error parsing data: {e}')
+                print(parsed_data)
+                print("Continue with next package\n\n")
+                break
             
             offset += field_size
 
@@ -148,7 +178,8 @@ class WoWStructParser:
                         field_value = field_value.hex()
                 
                 parsed_data[field_name] = field_value
-          
+
+        print()
         return parsed_data
 
     @staticmethod
@@ -164,37 +195,26 @@ class WoWStructParser:
             return file.read()
 
     @staticmethod
-    def save_bin_file(version, filename, data):
-        with open(f'build/{version}/bin/{filename}.bin', "wb") as f:
-            f.write(data)
-
-    @staticmethod
-    def load_bson_file(file_path):
-        """ Loads bson file (for simplicity, assuming it's a JSON for now) """
+    def load_json_file(file_path):
+        """ Loads json file (for simplicity, assuming it's a JSON for now) """
         with open(file_path, "r") as file:
-            return json.load(file)  
-
-
-if __name__ == "__main__":
-
-    version = sys.argv[1] if len(sys.argv) > 1 else "18414"
-    case = sys.argv[2] if len(sys.argv) > 2 else None
-    data = sys.argv[3] if len(sys.argv) > 3 else None
-
-    #if data and case:
-    # WoWStructParser.save_bin_file(version, "SMSG_AUTH_CHALLENGE", b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xff&F\xca')
-
+            return json.load(file)
         
-    if case and not data:
-        # Om ett specifikt case anges, kör det.
+    @staticmethod
+    def parse_case(version, case):
+         # Om ett specifikt case anges, kör det.
         def_file = f"build/{version}/def/{case}.def"
         bin_file = f"build/{version}/bin/{case}.bin"
-        bson_file = f"build/{version}/bson/{case}.bson"
+        json_file = f"build/{version}/json/{case}.json"
 
         # Ladda och bearbeta filerna
         struct_definition = WoWStructParser.load_file(def_file)
         raw_data = WoWStructParser.load_bin_file(bin_file)
-        expected_output = WoWStructParser.load_bson_file(bson_file)
+        expected_output = WoWStructParser.load_json_file(json_file)
+
+        print(case)
+        print(f"{struct_definition}\n")
+
 
         # Parsning och extrahering
         endianess, fields, dynamic_fields, metadata = WoWStructParser.parse_struct_definition(struct_definition)
@@ -202,35 +222,23 @@ if __name__ == "__main__":
 
         # Utskrift
         print(f"Raw Data: \n{raw_data}")
+        print(f"Len raw data: {len(raw_data)}")
         print("\nParsed Data: \n", json.dumps(parsed_data, indent=4))
         print("\nExpected Output: \n", json.dumps(expected_output, indent=4))
 
         if parsed_data == expected_output:
-            print("Match")
+            print("Match\n\n")
+
+
+if __name__ == "__main__":
+
+    version = sys.argv[1] if len(sys.argv) > 1 else "18414"
+    case = sys.argv[2] if len(sys.argv) > 2 else None
+
+    if case:
+        WoWStructParser.parse_case(version, case)
     else:
-        # Om inget specifikt case anges, kör alla cases i versionen.
         for case_file in os.listdir(f"build/{version}/def"):
             if case_file.endswith(".def"):
                 case = case_file.replace(".def", "")
-
-                def_file = f"build/{version}/def/{case}.def"
-                bin_file = f"build/{version}/bin/{case}.bin"
-                bson_file = f"build/{version}/bson/{case}.bson"
-
-                # Ladda och bearbeta filerna
-                struct_definition = WoWStructParser.load_file(def_file)
-                raw_data = WoWStructParser.load_bin_file(bin_file)
-                expected_output = WoWStructParser.load_bson_file(bson_file)
-
-                # Parsning och extrahering
-                endianess, fields, dynamic_fields, metadata = WoWStructParser.parse_struct_definition(struct_definition)
-                parsed_data = WoWStructParser.extract_data(raw_data, endianess, fields, dynamic_fields, metadata)
-
-                # Utskrift
-                print(f"\nProcessing {case}:")
-                print(f"Raw Data: \n{raw_data}")
-                print("\nParsed Data: \n", json.dumps(parsed_data, indent=4))
-                print("\nExpected Output: \n", json.dumps(expected_output, indent=4))
-
-                if parsed_data == expected_output:
-                    print("Match")
+                WoWStructParser.parse_case(version, case)

@@ -1,0 +1,7 @@
+endian: little
+header:
+data:
+   cmd: B      
+   notused: B         
+   reconnectProof: 16s 
+   notused2: 16s   
