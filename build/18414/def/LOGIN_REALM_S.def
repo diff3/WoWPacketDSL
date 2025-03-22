@@ -4,14 +4,15 @@ header:
    size: H
    realm_list_size: IH
 data:
-    icon: B
-    lock: B
-    flag: B
-    name: S
-    address: S
-    pop: f
-    characters: B
-    timezone: B
-    realmid: B
-    unk2: B
-    unk3: B
+   loop <realm_list_size> as realmlist:
+      icon: B
+      lock: B
+      flag: B
+      name: S, M
+      address: S
+      pop: f
+      characters: B
+      timezone: B
+      realmid: B
+   unk2: B
+   unk3: B

@@ -8,6 +8,11 @@ import re
 import sys
 
 
+"""
+TODO: Bugg med att lägga på metadata på texten, ex spegelvänd fungear inte
+
+"""
+
 class WoWStructParser:
     """ 
     The WoWStructParser class is used to define and parse network packet structures (WoW-Struct format). 
@@ -49,7 +54,8 @@ class WoWStructParser:
                     field_value = field_value.decode("utf-8").strip("\x00")
                 except UnicodeDecodeError:
                     field_value = field_value.hex()
-            if meta == "M" and isinstance(field_value, str):
+            elif meta == "M" and isinstance(field_value, str):
+                print("HÄRR")
                 field_value = field_value[::-1]
             elif meta == "U" and isinstance(field_value, str):
                 field_value = field_value.upper()
@@ -83,6 +89,26 @@ class WoWStructParser:
                 i += 1
                 continue  
 
+            if 'loop' in line:
+                loop_match = re.match(r"loop <(.*?)> as (\w+):", lines[i].strip())
+                leading_spaces = len(re.match(r"^\s*", lines[i])[0])
+
+                if loop_match:
+                    loop_count_variable = loop_match.group(1)
+                    field_name = loop_match.group(2)
+                    
+                    field_count = 0
+                    n = i + 1 
+            
+                    while n < len(lines) and len(re.match(r"^\s*", lines[n])[0]) > leading_spaces:
+                        field_count += 1
+                        n = n + 1 
+            
+                    fields.append(("loop", loop_count_variable.strip() + "|" + field_name.strip() + "|" + str(field_count)))
+
+                i += 1
+                continue
+
             if line.startswith("endian:"):
                 endian_type = line.split(":")[1].strip()
                 endianess = "<" if endian_type == "little" else ">"
@@ -102,16 +128,16 @@ class WoWStructParser:
         return endianess, fields, dynamic_fields, metadata
 
     @staticmethod
-    def extract_data(raw_data, endianess, fields, dynamic_fields, metadata):
+    def extract_data(raw_data, endianess, fields, metadata, offset=0):
         """
         Extracts data from the raw byte data based on the parsed fields and metadata. It applies transformations 
         or dynamic fields, mirrored strings, and IP addresses as defined in the structure.
         """
-
         parsed_data = {}
-        offset = 0
 
-        for field_name, field_type in fields:
+        i = 0
+        while i < len(fields):
+            field_name, field_type = fields[i]
             pattern = r'<(.*?)>'
             match = re.search(pattern, field_type)
 
@@ -119,26 +145,40 @@ class WoWStructParser:
                 variable_name = match.group(1)
                 field_type = str(parsed_data[variable_name]) + "s"
             
-            #try:
-            if not 'S' in field_type:
-                fmt = f"{endianess}{field_type}" 
-                field_size = struct.calcsize(fmt)
-            #except struct.error:
-             #   print(f"Error calculating size for format: {fmt}")
-              #  return None
+            if 'S' in field_type:
+                data = raw_data[offset:].split(b'\x00')[0]
+                print(data)
+                length = len(data) + 1
+                field_type = str(length) + "s"
+
+            try:
+                if (not 'loop' in field_name):
+                    fmt = f"{endianess}{field_type}" 
+                    field_size = struct.calcsize(fmt)
+            except struct.error:
+                    print(f"Error calculating size for format: {fmt}")
+                    continue
+                    # return None
             
             try:
-                if 's' in field_type:
-                    field_value = struct.unpack_from(fmt, raw_data, offset)[0]
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
-                elif 'S' in field_type:
-                    print("unknown")
-                    data = raw_data[offset:].split(b'\x00')[0]
-                    length = len(data) + 1 # x00 i removed in split
+                if 'loop' in field_name:
+                    field_type, variable_name, loop_field = field_type.split('|')
+                    loop = int(parsed_data[field_type])                   
+                    n = i + 1
+                    loop_fields = fields[n:n + int(loop_field)]
+                    variable_list = []
 
-                    field_value = struct.unpack_from(f'{length}s', raw_data, offset)[0]
-                    field_size = length
-                    field_type = "s"
+                    for x in range(loop):
+                        print(f'Loop {x}')
+                        parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, offset)
+                        variable_list.append(parsed_loop)
+                        
+                    i += len(loop_fields) + 1
+                    parsed_data[variable_name] = variable_list
+
+                    continue
+                elif 's' in field_type:
+                    field_value = struct.unpack_from(fmt, raw_data, offset)[0]
                     print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
                 elif re.match(r'^\d+[A-Za-z]$', field_type):
                     field_value = struct.unpack_from(fmt, raw_data, offset)
@@ -166,6 +206,7 @@ class WoWStructParser:
             offset += field_size
 
             if field_name in metadata:
+                print(field_name)
                 field_value = WoWStructParser.apply_field_modifiers(field_name, field_value, field_type, metadata)
                 parsed_data[field_name] = field_value
 
@@ -177,10 +218,13 @@ class WoWStructParser:
                     except UnicodeDecodeError:
                         field_value = field_value.hex()
                 
-                parsed_data[field_name] = field_value
+                if not field_name.startswith('_'):
+                    parsed_data[field_name] = field_value
+
+            i += 1
 
         print()
-        return parsed_data
+        return parsed_data, offset
 
     @staticmethod
     def load_file(file_path):
@@ -215,10 +259,11 @@ class WoWStructParser:
         print(case)
         print(f"{struct_definition}\n")
 
-
         # Parsning och extrahering
         endianess, fields, dynamic_fields, metadata = WoWStructParser.parse_struct_definition(struct_definition)
-        parsed_data = WoWStructParser.extract_data(raw_data, endianess, fields, dynamic_fields, metadata)
+        print(metadata)
+
+        parsed_data, _ = WoWStructParser.extract_data(raw_data, endianess, fields, metadata)
 
         # Utskrift
         print(f"Raw Data: \n{raw_data}")
