@@ -2,7 +2,7 @@ endian: little
 header:
    cmd: B
    size: H
-   realm_list_size: IH
+   realm_list_size: IH, C
 data:
    loop <realm_list_size> as realmlist:
       icon: B

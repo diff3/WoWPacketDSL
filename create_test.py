@@ -20,8 +20,8 @@ class FileHandler:
 
 
 version = 18414
-opkode = "LOGIN_REALM_S"
-raw_data  = b'\x10,\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00Azarim\x00192.168.11.30:8085\x00\x00\x00\x00\x00\x01\x01\x01\x10\x00'
+opkode = "SMSG_TUTORIAL_FLAGS"
+raw_data  = b'90\x00\x00\x86\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 FileHandler.save_bin_file(version, opkode, raw_data)
 FileHandler.save_def_file(version, opkode, "endian: little\nheader:\ndata:\n")

@@ -10,6 +10,8 @@ import sys
 
 """
 TODO: Bugg med att lägga på metadata på texten, ex spegelvänd fungear inte
+TODO: Fixa så att man kan välja, ibland vill man lägga ihop värden, ibland vill man skapa lista
+    ex. 8I kanske man vill ha en lista, medan IH kanske man vill lägga ihop.
 
 """
 
@@ -44,7 +46,7 @@ class WoWStructParser:
     @staticmethod
     def apply_field_modifiers(field_name, field_value, field_type, metadata):
         """ Hanterar modifierare (W, M, U, u) för ett fältvärde baserat på metadata """
-        
+
         for meta in metadata[field_name]:
             if meta == "W" and isinstance(field_value, bytes):
                 field_value = ".".join(str(b) for b in field_value)
@@ -54,14 +56,13 @@ class WoWStructParser:
                     field_value = field_value.decode("utf-8").strip("\x00")
                 except UnicodeDecodeError:
                     field_value = field_value.hex()
-            elif meta == "M" and isinstance(field_value, str):
-                print("HÄRR")
+            if meta == "M" and isinstance(field_value, str):
                 field_value = field_value[::-1]
-            elif meta == "U" and isinstance(field_value, str):
+            if meta == "U" and isinstance(field_value, str):
                 field_value = field_value.upper()
-            elif meta == "u" and isinstance(field_value, str):
+            if meta == "u" and isinstance(field_value, str):
                 field_value = field_value.lower()
-            elif meta == "H":
+            if meta == "H":
                 if isinstance(field_value, int):
                     field_value = hex(field_value)
                 elif isinstance(field_value, str):
@@ -128,7 +129,7 @@ class WoWStructParser:
         return endianess, fields, dynamic_fields, metadata
 
     @staticmethod
-    def extract_data(raw_data, endianess, fields, metadata, offset=0):
+    def extract_data(raw_data, endianess, fields, metadata, offset=0, just=0):
         """
         Extracts data from the raw byte data based on the parsed fields and metadata. It applies transformations 
         or dynamic fields, mirrored strings, and IP addresses as defined in the structure.
@@ -147,7 +148,6 @@ class WoWStructParser:
             
             if 'S' in field_type:
                 data = raw_data[offset:].split(b'\x00')[0]
-                print(data)
                 length = len(data) + 1
                 field_type = str(length) + "s"
 
@@ -170,7 +170,7 @@ class WoWStructParser:
 
                     for x in range(loop):
                         print(f'Loop {x}')
-                        parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, offset)
+                        parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, offset, just=4)
                         variable_list.append(parsed_loop)
                         
                     i += len(loop_fields) + 1
@@ -179,11 +179,11 @@ class WoWStructParser:
                     continue
                 elif 's' in field_type:
                     field_value = struct.unpack_from(fmt, raw_data, offset)[0]
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                    # print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
                 elif re.match(r'^\d+[A-Za-z]$', field_type):
                     field_value = struct.unpack_from(fmt, raw_data, offset)
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
-                elif len(fmt) > 2: 
+                    # print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                elif len(fmt) > 2 and 'C' in metadata.get(field_name, []): 
                     field_value = struct.unpack_from(fmt, raw_data, offset)
 
                     combined = 0
@@ -193,10 +193,10 @@ class WoWStructParser:
 
                     field_value = combined
 
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                    # print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
                 else:
                     field_value = struct.unpack_from(fmt, raw_data, offset)[0]
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+                    # print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
             except struct.error as e:
                 print(f'Error parsing data: {e}')
                 print(parsed_data)
@@ -206,7 +206,6 @@ class WoWStructParser:
             offset += field_size
 
             if field_name in metadata:
-                print(field_name)
                 field_value = WoWStructParser.apply_field_modifiers(field_name, field_value, field_type, metadata)
                 parsed_data[field_name] = field_value
 
@@ -220,10 +219,12 @@ class WoWStructParser:
                 
                 if not field_name.startswith('_'):
                     parsed_data[field_name] = field_value
-
+            if just:
+                print(f"{'':>4}Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
+            else:
+                print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
             i += 1
 
-        print()
         return parsed_data, offset
 
     @staticmethod
@@ -261,11 +262,12 @@ class WoWStructParser:
 
         # Parsning och extrahering
         endianess, fields, dynamic_fields, metadata = WoWStructParser.parse_struct_definition(struct_definition)
-        print(metadata)
+        # print(metadata)
 
         parsed_data, _ = WoWStructParser.extract_data(raw_data, endianess, fields, metadata)
 
         # Utskrift
+        print()
         print(f"Raw Data: \n{raw_data}")
         print(f"Len raw data: {len(raw_data)}")
         print("\nParsed Data: \n", json.dumps(parsed_data, indent=4))
