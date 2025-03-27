@@ -20,8 +20,8 @@ class FileHandler:
 
 
 version = 18414
-opkode = "SMSG_TUTORIAL_FLAGS"
-raw_data  = b'90\x00\x00\x86\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+opkode = "SMSG_SET_TIME_ZONE_INFORMATION"
+raw_data = b'\x0e\x1cEtc/UTCEtc/UTC'
 
 FileHandler.save_bin_file(version, opkode, raw_data)
 FileHandler.save_def_file(version, opkode, "endian: little\nheader:\ndata:\n")

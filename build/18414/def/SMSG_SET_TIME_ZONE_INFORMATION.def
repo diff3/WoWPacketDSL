@@ -1,0 +1,5 @@
+endian: little
+header:
+data:
+    len1: bit7
+    time_zone1: <len1>s

@@ -1,18 +1,27 @@
+block <test>:
+   characters: B
+   timezone: B
+   realmid: B
+
 endian: little
 header:
    cmd: B
    size: H
    realm_list_size: IH, C
 data:
-   loop <realm_list_size> as realmlist:
+   loop <realm_list_size> as <realmlist>:
       icon: B
       lock: B
       flag: B
-      name: S, M
+      # test
+      name: S
       address: S
       pop: f
-      characters: B
-      timezone: B
-      realmid: B
+      include: <test>
+      # characters: B
+      # timezone: B
+      # realmid: B
    unk2: B
+   # rtest
    unk3: B
+
