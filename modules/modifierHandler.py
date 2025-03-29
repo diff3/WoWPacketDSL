@@ -5,13 +5,15 @@
 class ModifierOperator:
 
     @staticmethod
-    def modifier_parser(line:str, metadata:dict, fields:list) -> dict, list:
+    def modifier_parser(line:str, metadata:dict, fields:list):
         """
-         Parses a line containing a field definition and updates the metadata and fields lists.
+        Parses a line containing a field definition and updates the metadata and fields lists.
 
         The method splits the line into field name, field type, and modifiers, then updates the 
         metadata dictionary with the modifiers associated with the field. It also appends the 
         field name and type to the fields list.
+
+        Return metadata dict, and fields list
         """
 
         field_name, field_type = line.split(":")
@@ -34,6 +36,14 @@ class ModifierOperator:
 
     @staticmethod
     def modifier_handler(field_name, field_value, field_type, metadata):
+        """
+        Applies modifiers to a field value based on the field's name, type, and associated metadata.
+
+        This method first checks if the field's value is of type `bytes` and if the field type is a string (`s`).
+        It then decodes the bytes to a string (if possible), or converts it to a hexadecimal string. 
+        Next, it applies the modifiers from the metadata to the field value using a mapping of modifier operations.
+        """
+        
         if isinstance(field_value, bytes) and ("s" in field_type) and not ('ip' in field_name):
             try:
                 field_value = field_value.decode("utf-8").strip("\x00")

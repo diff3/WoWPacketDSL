@@ -36,7 +36,8 @@ class LoopInterPreter:
 class LoopExtrator:
     
     @staticmethod
-    def extractor(field_type, parsed_data, loop_field, fields, debug ):
+    def extractor(field_type, parsed_data, loop_field, fields, debug):
+
 
         try:
             loop = int(field_type)
@@ -45,11 +46,12 @@ class LoopExtrator:
 
         n = i + 1
         loop_fields = fields[n:n + int(loop_field)]
-        print(type(loop_field))
         variable_list = []
+
         for x in range(loop):
             if debug:
                 print(f'Loop {x}')
+
             parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, block, offset, just=4, debug=False)
             variable_list.append(parsed_loop)
 

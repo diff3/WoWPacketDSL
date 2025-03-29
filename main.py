@@ -8,9 +8,11 @@ import re
 import sys
 import time
 
+from modules.blockHandler import BlockInterPreter
 from modules.bitsHandler import BitReader
 from modules.loopHandler import LoopInterPreter
 from modules.modifierHandler import ModifierOperator
+from modules.randseqHandler import RandseqInterPreter
 from utils.fileUtils import FileHandler
 from utils.parseUtils import ParsingUtils
 
@@ -44,54 +46,24 @@ class StructDefintion:
                 endianess = StructDefintion.check_endian(line)
                 i += 1
                 continue
-
+            
             if 'block' in line:
-                result = WoWStructParser.handle_comments_and_blocks(lines, i)
-                num = result[0]
-                block_lines = result[1]
-
-                loop_match = re.match(r"block <(\w+)>:", lines[i].strip())
-
-                variable_list = []
-
-                if loop_match:
-                    variable = loop_match.group(1)
-
-                for b in block_lines:
-                    try:
-                        field_name, field_type = b.split(":")
-                        variable_list.append((field_name.strip(), field_type.strip()))
-                        
-                    except ValueError as e:
-                        if debug:
-                            print(f"Value error: {e}")
-                            print(lines[i])
-
-
+                variable, variable_list, num = BlockInterPreter.parser(lines, i)
                 block[variable] = variable_list
-                i += num + 1
+                i += num
                 continue
+            
             if 'loop' in line:
                 fields.append(LoopInterPreter.parser(lines, i))
                 i += 1
                 continue
+            
             if 'randseq' in line:
-                result = WoWStructParser.handle_comments_and_blocks(lines, i)
-                num = result[0]
-                block_lines = result[1]
-                loop_match = re.match(r"randseq (\d+) as <(\w+)>:", lines[i].strip())
-
-                if loop_match:
-                    length_in_bytes = loop_match.group(1)
-                    variable_name = loop_match.group(2)
-                else:
-                    print("helojfewöfijwelfjhewj")
-
-               
-                fields.append(('randseq', f"{length_in_bytes}", f"{variable_name}", f"{num}"))
-                print(f'randseq {length_in_bytes}, {variable_name}, {num}')
+                fields.append(RandseqInterPreter.parser(lines, i))
                 i += 1
                 continue
+                
+               
             if ":" in line and "," in line:
                 metadata, fields = ModifierOperator.modifier_parser(line, metadata, fields)
                 i += 1
@@ -121,25 +93,6 @@ class WoWStructParser:
     It reads the structure definition, handles dynamic fields, and applies the appropriate transformations 
     such as endianess, string mirroring, and IP formatting.
     """
-
-    @staticmethod
-    def handle_comments_and_blocks(lines, i):
-        """
-        Hanterar både kommentarer och block. Identifierar kommentarer som startar med # eller #- och slut på samma rad eller efter flera rader.
-        Hanterar också block som loop, if, switch, bitmask och randseq.
-        """
-        
-        line = lines[i]
-
-        if line.strip().startswith("randseq"):
-            return ParsingUtils.count_size_of_block_structure(lines, i)
-        elif line.strip().startswith("block"):
-            return ParsingUtils.count_size_of_block_structure(lines, i)
-        elif line.strip().startswith("if"):
-            return ParsingUtils.count_size_of_block_structure(lines, i)
-        
-        return False
-    
 
     @staticmethod
     def extract_data(raw_data, endianess, fields, metadata, block=None, offset=0, just=0, debug=True):
