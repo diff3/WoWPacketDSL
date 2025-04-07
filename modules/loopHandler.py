@@ -36,23 +36,21 @@ class LoopInterPreter:
 class LoopExtrator:
     
     @staticmethod
-    def extractor(field_type, parsed_data, loop_field, fields, debug):
+    def extractor(parameters):
+        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
 
-
-        try:
-            loop = int(field_type)
-        except ValueError:
-            loop = int(parsed_data[field_type])                 
-
-        n = i + 1
-        loop_fields = fields[n:n + int(loop_field)]
+        loop = int(parsed_data[field_type])                 
+        loop_fields = fields[i + 1:i + 1 + int(loop_field)]
         variable_list = []
 
         for x in range(loop):
             if debug:
                 print(f'Loop {x}')
+            
+            loop_parameters = parameters
+            loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4})
 
-            parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, block, offset, just=4, debug=False)
+            parsed_loop, offset = WoWStructParser.extract_data(loop_parameters)
             variable_list.append(parsed_loop)
 
             if offset > len(raw_data):
@@ -60,5 +58,3 @@ class LoopExtrator:
         
         i += len(loop_fields) + 1
         parsed_data[variable_name] = variable_list
-
-        return variable_name, variable_list,  len(loop_fields) + 1

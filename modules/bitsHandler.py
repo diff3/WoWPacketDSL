@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-class BitReader:
+class BitInterPreter:
     """
     Class to read bits from a byte array.
     """
@@ -32,7 +32,7 @@ class BitReader:
         value = 0
 
         for _ in range(num_bits):
-            bit, byte_pos, bit_pos = BitReader.read_bit(data, byte_pos, bit_pos)
+            bit, byte_pos, bit_pos = BitInterPreter.read_bit(data, byte_pos, bit_pos)
             value = (value << 1) | bit
         
         return value, byte_pos, bit_pos

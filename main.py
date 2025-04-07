@@ -9,10 +9,11 @@ import sys
 import time
 
 from modules.blockHandler import BlockInterPreter
-from modules.bitsHandler import BitReader
+from modules.bitsHandler import BitInterPreter
 from modules.loopHandler import LoopInterPreter
-from modules.modifierHandler import ModifierOperator
+from modules.modifierHandler import ModifierInterPreter
 from modules.randseqHandler import RandseqInterPreter
+from modules.structHandler import StructInterPreter
 from utils.fileUtils import FileHandler
 from utils.parseUtils import ParsingUtils
 
@@ -26,60 +27,60 @@ TODO: har man kommentarer på flera rader så påverkar det raden innan kommenta
 
 class StructDefintion:
     @staticmethod
-    def parse_struct_definition(lines, endianess = "<", debug=True):
+    # def parse_struct_definition(lines, parameters, endianess = "<", debug=True):
+    def parse_struct_definition(parameters: dict) -> dict:
         """
         Parses the structure definition from a given string and returns a list of fields, dynamic fields, and 
         metadata. It handles endian, dynamic fields, and other modifiers like M (mirrored) and W (ip).
         """
 
-        fields = []
-        dynamic_fields = {}
-        metadata = {}
-        block = {}
-
+        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
+        
         i = 0
+  
+        lines = struct_definition_list
 
         while i < len(lines):
             line = lines[i].strip()
           
             if line.startswith("endian:"):
                 endianess = StructDefintion.check_endian(line)
+                parameters['endianess'] = endianess
                 i += 1
                 continue
             
-            if 'block' in line:
+            if line.startswith('block'):
                 variable, variable_list, num = BlockInterPreter.parser(lines, i)
-                block[variable] = variable_list
+                parameters['block'].update({variable: variable_list})
                 i += num
                 continue
             
-            if 'loop' in line:
-                fields.append(LoopInterPreter.parser(lines, i))
+            if line.startswith('loop'):
+                parameters['fields'].append(LoopInterPreter.parser(lines, i))
                 i += 1
                 continue
             
-            if 'randseq' in line:
-                fields.append(RandseqInterPreter.parser(lines, i))
+            if line.startswith('randseq'):
+                parameters['fields'].append(RandseqInterPreter.parser(lines, i))
                 i += 1
                 continue
                 
-               
+            # This is struct with modifier
             if ":" in line and "," in line:
-                metadata, fields = ModifierOperator.modifier_parser(line, metadata, fields)
+                metadata, fields = ModifierInterPreter.parser(line, metadata, fields)
+                parameters['metadata'].update(metadata)
                 i += 1
                 continue
 
-            try:
-                field_name, field_type = lines[i].split(":")
-                fields.append((field_name.strip(), field_type.strip()))
-            except ValueError as e:
-                if debug:
-                    print(f"Value error: {e}")
-                    print(lines[i])
-
+            # Just struct
+            if ":" in line:
+                parameters['fields'].append(StructInterPreter.parser(lines, i))
+                i += 1
+                continue
+            
             i += 1
 
-        return endianess, fields, dynamic_fields, metadata, block
+        return parameters
 
     @staticmethod
     def check_endian(line):
@@ -95,21 +96,24 @@ class WoWStructParser:
     """
 
     @staticmethod
-    def extract_data(raw_data, endianess, fields, metadata, block=None, offset=0, just=0, debug=True):
+    def extract_data(parameters):
+    # def extract_data(raw_data, endianess, fields, metadata, block=None, offset=0, just=0, debug=True):
         """
         Extracts data from the raw byte data based on the parsed fields and metadata. It applies transformations 
         or dynamic fields, mirrored strings, and IP addresses as defined in the structure.
         """
+
+        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
+
         parsed_data = {}
         fmt = ""
         field_size = 0
         field_value = ""
-        # buffer = BitReader.ByteBuffer()
+        
+
         i = 0
 
         while i < len(fields):
-
-
             if len(fields[i]) == 2:
                 field_name, field_type = fields[i]
             elif len(fields[i]) == 3:
@@ -162,25 +166,25 @@ class WoWStructParser:
                     pattern = r'<(.*?)>'
                     match = re.search(pattern, field_type)
 
-                    parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, block[match.group(1)], metadata, block, offset, just=4, debug=False)
+                    parsed_loop, offset = WoWStructParser.extract_data(parameters)
+                    # parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, block[match.group(1)], metadata, block, offset, just=4, debug=False)
                     i += len(parsed_loop) + 1
                     parsed_data.update(parsed_loop)
                     # print(parsed_data)
                     continue
                 elif 'loop' in field_name:
-                    try:
-                        loop = int(field_type)
-                    except ValueError:
-                        loop = int(parsed_data[field_type])                 
-
-                    n = i + 1
-                    loop_fields = fields[n:n + int(loop_field)]
-                    print(type(loop_field))
+                    loop = int(parsed_data[field_type])                 
+                    loop_fields = fields[i + 1:i + 1 + int(loop_field)]
                     variable_list = []
+
                     for x in range(loop):
                         if debug:
                             print(f'Loop {x}')
-                        parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, loop_fields, metadata, block, offset, just=4, debug=False)
+                        
+                        loop_parameters = parameters
+                        loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4})
+
+                        parsed_loop, offset = WoWStructParser.extract_data(loop_parameters)
                         variable_list.append(parsed_loop)
 
                         if offset > len(raw_data):
@@ -226,9 +230,9 @@ class WoWStructParser:
                         elif isinstance(value, tuple):  # Om det är en tuple av start och slut position
                             start, end = value
                             parsed_data_randseq[key] = int.from_bytes(raw_data[int(start):int(end)], byteorder='little')
-                    '''
-                    addon_size = int.from_bytes(raw_data[54:58], byteorder='little')'''
-                    print(parsed_data_randseq)
+                    
+                    addon_size = int.from_bytes(raw_data[54:58], byteorder='little')
+                    # print(parsed_data_randseq)
                     addon_data_start = 58
 
 
@@ -243,14 +247,14 @@ class WoWStructParser:
                     bit_pos = 0
 
                     # Läs första biten
-                    bit, byte_pos, bit_pos = BitReader.read_bit(test, byte_pos, bit_pos)
+                    bit, byte_pos, bit_pos = BitInterPreter.read_bit(test, byte_pos, bit_pos)
                     # print(f"Bit: {bit}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
 
                     # parsed_data_randseq["_"] = test[byte_pos + 1:byte_pos + 1 + int(bits)]
 
 
                     # Läs nästa 11 bitar
-                    bits, byte_pos, bit_pos = BitReader.read_bits(test, byte_pos, bit_pos, 11)
+                    bits, byte_pos, bit_pos = BitInterPreter.read_bits(test, byte_pos, bit_pos, 11)
                     # print(f"Bits: {bits}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
                     parsed_data_randseq["user_length"] = int(bits)
 
@@ -290,11 +294,11 @@ class WoWStructParser:
                 continue
                 
             if field_name in metadata:
-                field_value = ModifierOperator.modifier_handler(field_name, field_value, field_type, metadata)
+                field_value = ModifierInterPreter.modifier_handler(field_name, field_value, field_type, metadata)
                 parsed_data[field_name] = field_value
             else:
                 if "s" in field_type:
-                    field_value = ModifierOperator.to_string_from_bytes(field_value)
+                    field_value = ModifierInterPreter.to_string_from_bytes(field_value)
                     parsed_data[field_name] = field_value
                    
                 else:
@@ -315,12 +319,10 @@ class WoWStructParser:
         
     @staticmethod
     def parse_case(version, case):
-         # Om ett specifikt case anges, kör det.
         def_file = f"build/{version}/def/{case}.def"
         bin_file = f"build/{version}/bin/{case}.bin"
         json_file = f"build/{version}/json/{case}.json"
 
-        # Ladda och bearbeta filerna
         struct_definition = FileHandler.load_file(def_file)
         raw_data = FileHandler.load_bin_file(bin_file)
         expected_output = FileHandler.load_json_file(json_file)
@@ -328,16 +330,29 @@ class WoWStructParser:
         print(case)
         print(f"{struct_definition}\n")
 
-        # Clean it
         struct_definition_list = ParsingUtils.remove_comments_and_reserved(struct_definition)
 
-        # Parsning och extrahering
-        endianess, fields, dynamic_fields, metadata, block = StructDefintion.parse_struct_definition(struct_definition_list)
-        # print(metadata)
+        parameters = {
+            "endianess": "<",
+            "fields": [],
+            "metadata": {},
+            "block": {},
+            "raw_data": raw_data,  
+            "debug": True,
+            "struct_definition_list": struct_definition_list,
+            "just": 0, 
+            "offset": 0
+        }
 
-        parsed_data, _ = WoWStructParser.extract_data(raw_data, endianess, fields, metadata, block)
+        parameters = StructDefintion.parse_struct_definition(parameters)
 
-        # Utskrift
+        print(f'Endian: {parameters['endianess']}\n')
+        print(f'Fields: {parameters['fields']}\n')
+        print(f'Metadata: {parameters['metadata']}\n')
+        print(f'Block: {parameters['block']}\n')
+
+        parsed_data, _ = WoWStructParser.extract_data(parameters)
+        
         print()
         print(f"Raw Data: \n{raw_data}")
         print(f"Len raw data: {len(raw_data)}")
@@ -351,23 +366,28 @@ class WoWStructParser:
     def parse_case_unittest(version, case):
         def_file = f"build/{version}/def/{case}.def"
         bin_file = f"build/{version}/bin/{case}.bin"
-        json_file = f"build/{version}/json/{case}.json"
 
         struct_definition = FileHandler.load_file(def_file)
         raw_data = FileHandler.load_bin_file(bin_file)
-        expected_output = FileHandler.load_json_file(json_file)
 
         struct_definition_list = ParsingUtils.remove_comments_and_reserved(struct_definition)
 
-        endianess, fields, dynamic_fields, metadata, block = StructDefintion.parse_struct_definition(struct_definition_list, debug=False)
+        parameters = {
+            "endianess": "<",
+            "fields": [],
+            "metadata": {},
+            "block": {},
+            "raw_data": raw_data,  
+            "debug": False,
+            "struct_definition_list": struct_definition_list,
+            "just": 0, 
+            "offset": 0
+        }
 
-        parsed_data, _ = WoWStructParser.extract_data(raw_data, endianess, fields, metadata, block, debug=False)
-
-        test = json.dumps(parsed_data)
-
-
-
-        return test
+        parameters = StructDefintion.parse_struct_definition(parameters)
+        parsed_data, _ = WoWStructParser.extract_data(parameters)
+        
+        return json.dumps(parsed_data)
 
 
 if __name__ == "__main__":

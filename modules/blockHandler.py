@@ -24,13 +24,11 @@ class BlockInterPreter:
                 try:
                     field_name, field_type = b.split(":")
                     variable_list.append((field_name.strip(), field_type.strip()))
-                    
+                    num += 1
                 except ValueError as e:
                     if debug:
                         print(f"Value error: {e}")
                         print(lines[i])
-
-            num += 1
 
             return variable, variable_list, num
         

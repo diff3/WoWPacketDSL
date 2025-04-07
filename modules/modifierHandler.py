@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 
-class ModifierOperator:
+class ModifierInterPreter:
 
     @staticmethod
-    def modifier_parser(line:str, metadata:dict, fields:list):
+    def parser(line:str, metadata:dict, fields:list):
         """
         Parses a line containing a field definition and updates the metadata and fields lists.
 
@@ -107,10 +107,10 @@ class ModifierOperator:
 
 
 modifiers_opereration_mapping = {
-    "H": ModifierOperator.to_hex,
-    "M": ModifierOperator.to_mirror,
-    "s": ModifierOperator.to_string,
-    "u": ModifierOperator.to_lower,
-    "U": ModifierOperator.to_upper,
-    "W": ModifierOperator.to_ip_address
+    "H": ModifierInterPreter.to_hex,
+    "M": ModifierInterPreter.to_mirror,
+    "s": ModifierInterPreter.to_string,
+    "u": ModifierInterPreter.to_lower,
+    "U": ModifierInterPreter.to_upper,
+    "W": ModifierInterPreter.to_ip_address
 }

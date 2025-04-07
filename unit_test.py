@@ -2,7 +2,7 @@ import unittest
 import json
 import os
 from main import WoWStructParser 
-from main import ModifierOperator 
+# from modules.modifierHandler import ModifierInterPreter
 
 class TestParser(unittest.TestCase):
     
@@ -15,11 +15,7 @@ class TestParser(unittest.TestCase):
     def test_parser(self):
         """ Testa parsern genom att jämföra med förväntat resultat. """
         
-        # Kör parsern med data
         version = 18414
-        # case = "AUTH_LOGON_CHALLENGE_C"
-
-        # Jämför det faktiska resultatet med det förväntade resultatet
         
         self.ant = 0
         self.succes = 0
@@ -28,7 +24,6 @@ class TestParser(unittest.TestCase):
         for case_file in os.listdir(f"build/{version}/def"):
             if case_file.endswith(".def"):
                 case = case_file.replace(".def", "")
-                
                 
                 parsed_data = WoWStructParser.parse_case_unittest(version, case)
 
