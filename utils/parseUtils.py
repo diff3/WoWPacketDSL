@@ -32,6 +32,30 @@ class ParsingUtils:
         return [ant, block_lines]
 
     @staticmethod   
+    def get_values(d: dict, *keys) -> dict:
+        """
+        Returns the values from the dictionary `d` corresponding to the provided keys.
+        """
+
+        return (d[k] for k in keys)
+    
+    @staticmethod   
+    def init_parameters(raw_data, struct_definition_list, debug=False, endianess="<"):
+        return {
+            "endianess": endianess,
+            "fields": [],
+            "modifiers": {},
+            "block": {},
+            "raw_data": raw_data,  
+            "debug": debug,
+            "struct_definition_list": struct_definition_list,
+            "just": 0, 
+            "offset": 0,
+            "parsed_data": {},
+            "i": 0
+        }
+
+    @staticmethod   
     def remove_comments_and_reserved(struct_definition):
         """
         Removes comments (single and multi-line) and reserved sections ('header:', 'data:') 
@@ -68,3 +92,29 @@ class ParsingUtils:
                 i += 1
 
         return new_list
+
+    def resolve_string_field_type(field_type: str, raw_data: bytes, offset: int, parsed_data: dict) -> str:
+        """
+        Resolves special string-related field types:
+        - <variable>s: Dynamically sized strings based on a previously parsed value
+        - S: Null-terminated string with unknown length, calculated from raw_data
+        """
+
+        # Replace <variable>s with the actual value from parsed_data
+        if match := re.search(r'<(.*?)>s', field_type):
+            variable = match.group(1)
+            try:
+                field_type = f"{parsed_data[variable]}s"
+            except KeyError:
+                raise KeyError(f"Variable '{variable}' not found in parsed_data")
+
+        # Handle 'S' as a null-terminated string (e.g. C-style string)
+        if field_type == 'S':
+            string_data = raw_data[offset:].split(b'\x00')[0]
+            length = len(string_data) + 1  # Include the null terminator
+            field_type = f"{length}s"
+
+        return field_type
+        
+
+get_values = ParsingUtils.get_values

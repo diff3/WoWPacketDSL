@@ -4,4 +4,4 @@ data:
    cmd: B      
    _: B         
    reconnectProof: 16s
-   ignore: 16s   
+   _: 16s   

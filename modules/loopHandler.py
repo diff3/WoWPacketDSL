@@ -4,6 +4,8 @@
 import re
 from utils.parseUtils import ParsingUtils
 
+from utils.parseUtils import get_values
+
 class LoopInterPreter:
 
     @staticmethod
@@ -32,29 +34,40 @@ class LoopInterPreter:
 
         return ("loop", loop_count_variable, field_name ,num)
 
-
-class LoopExtrator:
-    
     @staticmethod
-    def extractor(parameters):
-        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
+    def extractor(parameters: dict) -> dict:
+        from main import WoWStructParser
 
-        loop = int(parsed_data[field_type])                 
+        fields, raw_data, debug, offset, parsed_data, i = get_values(parameters, "fields", "raw_data", "debug", "offset", "parsed_data", "i")
+        _, field_type, variable_name, loop_field = fields[i]
+
+        loop = int(parsed_data[field_type])             
         loop_fields = fields[i + 1:i + 1 + int(loop_field)]
+
         variable_list = []
 
         for x in range(loop):
             if debug:
                 print(f'Loop {x}')
             
-            loop_parameters = parameters
-            loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4})
+            loop_parameters = parameters.copy()
+            loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4, 'i': 0, 'parsed_data': {}})
 
             parsed_loop, offset = WoWStructParser.extract_data(loop_parameters)
+
             variable_list.append(parsed_loop)
 
             if offset > len(raw_data):
                 break
         
         i += len(loop_fields) + 1
-        parsed_data[variable_name] = variable_list
+        parameters["parsed_data"][variable_name] = variable_list
+
+        parameters.update({
+            "i": i,
+            "offset": offset
+        })
+
+        return parameters
+        
+        

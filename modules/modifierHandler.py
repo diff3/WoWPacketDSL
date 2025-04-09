@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import struct
+
 
 class ModifierInterPreter:
 
@@ -43,7 +45,7 @@ class ModifierInterPreter:
         It then decodes the bytes to a string (if possible), or converts it to a hexadecimal string. 
         Next, it applies the modifiers from the metadata to the field value using a mapping of modifier operations.
         """
-        
+
         if isinstance(field_value, bytes) and ("s" in field_type) and not ('ip' in field_name):
             try:
                 field_value = field_value.decode("utf-8").strip("\x00")
@@ -57,6 +59,15 @@ class ModifierInterPreter:
         return field_value
 
     @staticmethod
+    def combine_data(field_value):
+        combined = 0
+
+        for value in field_value:
+            combined += value
+
+        return combined
+
+    @staticmethod
     def to_hex(field_value):
         if isinstance(field_value, int):
             field_value = hex(field_value)
@@ -67,7 +78,7 @@ class ModifierInterPreter:
     
     @staticmethod
     def to_mirror(field_value):
-        if isinstance(field_value, str): 
+        if isinstance(field_value, str):
             return field_value[::-1]
         return field_value
     
@@ -87,7 +98,15 @@ class ModifierInterPreter:
     def to_ip_address(field_value):
         if isinstance(field_value, bytes):
             return ".".join(str(b) for b in field_value)
-        return field_value
+        elif isinstance(field_value, str):
+            try:
+                byte_data = bytes.fromhex(field_value)
+                return ".".join(str(b) for b in byte_data)
+            except ValueError:
+                print(f"Invalid hex value: {field_value}")
+                return None
+
+        return field_value 
     
     @staticmethod
     def to_string(field_value):
@@ -112,5 +131,6 @@ modifiers_opereration_mapping = {
     "s": ModifierInterPreter.to_string,
     "u": ModifierInterPreter.to_lower,
     "U": ModifierInterPreter.to_upper,
-    "W": ModifierInterPreter.to_ip_address
+    "W": ModifierInterPreter.to_ip_address,
+    "C": ModifierInterPreter.combine_data
 }

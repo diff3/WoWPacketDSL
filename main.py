@@ -6,7 +6,6 @@ import struct
 import os
 import re
 import sys
-import time
 
 from modules.blockHandler import BlockInterPreter
 from modules.bitsHandler import BitInterPreter
@@ -15,15 +14,12 @@ from modules.modifierHandler import ModifierInterPreter
 from modules.randseqHandler import RandseqInterPreter
 from modules.structHandler import StructInterPreter
 from utils.fileUtils import FileHandler
-from utils.parseUtils import ParsingUtils
-
+from utils.parseUtils import ParsingUtils, get_values
 
 """
 TODO: Fix bit operation.
-TODO: Det går att ha flera variabler, men ibland är in parse filen nåbar, som i looper, då kan man bara använda variabler inom loopen
-TODO: har man kommentarer på flera rader så påverkar det raden innan kommentaren.
+TODO: Fix randseq
 """
-
 
 class StructDefintion:
     @staticmethod
@@ -31,14 +27,12 @@ class StructDefintion:
     def parse_struct_definition(parameters: dict) -> dict:
         """
         Parses the structure definition from a given string and returns a list of fields, dynamic fields, and 
-        metadata. It handles endian, dynamic fields, and other modifiers like M (mirrored) and W (ip).
+        modifiers. It handles endian, dynamic fields, and other modifiers like M (mirrored) and W (ip).
         """
 
-        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
-        
+        endianess, fields, modifiers, lines = get_values(parameters, "endianess", "fields", "modifiers", "struct_definition_list")
+               
         i = 0
-  
-        lines = struct_definition_list
 
         while i < len(lines):
             line = lines[i].strip()
@@ -67,8 +61,8 @@ class StructDefintion:
                 
             # This is struct with modifier
             if ":" in line and "," in line:
-                metadata, fields = ModifierInterPreter.parser(line, metadata, fields)
-                parameters['metadata'].update(metadata)
+                modifiers, fields = ModifierInterPreter.parser(line, modifiers, fields)
+                parameters['modifiers'].update(modifiers)
                 i += 1
                 continue
 
@@ -97,222 +91,169 @@ class WoWStructParser:
 
     @staticmethod
     def extract_data(parameters):
-    # def extract_data(raw_data, endianess, fields, metadata, block=None, offset=0, just=0, debug=True):
+    # def extract_data(raw_data, endianess, fields, modifiers, block=None, offset=0, just=0, debug=True):
         """
-        Extracts data from the raw byte data based on the parsed fields and metadata. It applies transformations 
+        Extracts data from the raw byte data based on the parsed fields and modifiers. It applies transformations 
         or dynamic fields, mirrored strings, and IP addresses as defined in the structure.
         """
 
-        endianess, fields, metadata, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
+        # endianess, fields, modifiers, block, raw_data, debug, struct_definition_list, just, offset = parameters.values()
 
-        parsed_data = {}
-        fmt = ""
-        field_size = 0
-        field_value = ""
-        
-
-        i = 0
+        endianess, fields, modifiers, raw_data, debug, just, offset, i, parsed_data = get_values(parameters,
+            "endianess", "fields", "modifiers", "raw_data", "debug", "just", "offset", "i", "parsed_data"
+        )
 
         while i < len(fields):
-            if len(fields[i]) == 2:
-                field_name, field_type = fields[i]
-            elif len(fields[i]) == 3:
-                field_name, field_type, variable_name = fields[i]
-            else:
-                field_name, field_type, variable_name, loop_field = fields[i]
+            field = fields[i]
+            field_name = field[0]
+            field_type = field[1]
+           
+            # Check special string cases. ex. variables and terminator
+            field_type = ParsingUtils.resolve_string_field_type(field_type, raw_data, offset, parsed_data)
 
-            pattern = r'<(.*?)>'
-            match = re.search(pattern, field_type)
+            if 'bit' in field_type:
+                pass
+            elif 'include' in field_name:
+                parameters = BlockInterPreter.include_handler(parameters)
+                i, offset, parsed_data = get_values(parameters, "i", "offset", "parsed_data")
+                continue
+            elif 'loop' in field_name:
+                parameters = LoopInterPreter.extractor(parameters)
+                i, offset, parsed_data = get_values(parameters, "i", "offset", "parsed_data")
+                continue                    
+            elif 'randseq' in field_name:
+                loop = int(field_type)
 
-            if match and not 'include' in field_name:
-                variable_name = match.group(1)
-                field_type = str(parsed_data[variable_name]) + "s"      
-            
-            if 'S' in field_type:
-                data = raw_data[offset:].split(b'\x00')[0]
-                length = len(data) + 1
-                field_type = str(length) + "s"
+                n = i + 1
+                randseq_fields = fields[n:n + loop]
+
+                randseq_definition = {}
+
+                for field in randseq_fields:
+                    print([field[0]])
+                    print([field[1]])
+                    if not '-' in field[1] and ' ' in field[1]:
+                        randseq_definition[field[0]] = [int(x) for x in field[1].split(' ')]
+                    elif  '-' in field[1]:
+                        randseq_definition[field[0]] = tuple(field[1].split('-'))
+                    elif not '-' in field[1]:
+                        randseq_definition[field[0]] = field[1]
+                    elif '><' in field[1]:
+                        print("patters")
+                        pattern = r'<(\w+)><(\w+)>'
+                        match = re.search(pattern, field[1])
+                        print(match)
+
+
+                print(randseq_definition)
+
+                parsed_data_randseq = {}
+
+                for key, value in randseq_definition.items():
+                    if isinstance(value, list):  # Om det är en lista av bytes
+                        parsed_data_randseq[key] = [f"{raw_data[index]:02X}" for index in value]
+                        parsed_data_randseq[key] = "".join(parsed_data_randseq[key])
+                    
+                    elif isinstance(value, tuple):  # Om det är en tuple av start och slut position
+                        start, end = value
+                        parsed_data_randseq[key] = int.from_bytes(raw_data[int(start):int(end)], byteorder='little')
+                
+                addon_size = int.from_bytes(raw_data[54:58], byteorder='little')
+                # print(parsed_data_randseq)
+                addon_data_start = 58
+
+
+                addon_data_end = addon_data_start + addon_size
+                parsed_data_randseq["addon_size"] = addon_size
+                parsed_data_randseq["addon_data"] = raw_data[addon_data_start:addon_data_end].hex()
+
+                test = raw_data[addon_data_end:]
+
+                # Läs en bit
+                byte_pos = 0
+                bit_pos = 0
+
+                # Läs första biten
+                bit, byte_pos, bit_pos = BitInterPreter.read_bit(test, byte_pos, bit_pos)
+                # print(f"Bit: {bit}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
+
+                # parsed_data_randseq["_"] = test[byte_pos + 1:byte_pos + 1 + int(bits)]
+
+
+                # Läs nästa 11 bitar
+                bits, byte_pos, bit_pos = BitInterPreter.read_bits(test, byte_pos, bit_pos, 11)
+                # print(f"Bits: {bits}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
+                parsed_data_randseq["user_length"] = int(bits)
+
+                # Hoppa över de första två bytena och skriv ut återstående data
+                # print(test[byte_pos + 1:byte_pos + 1 + int(bits)])  # Hoppa över 2 byte och skriv ut de 4 återstående
+                parsed_data_randseq["user"] = test[byte_pos + 1:byte_pos + 1 + int(bits)].decode()
+                parsed_data.update(parsed_data_randseq)           
+
+                i += int(loop_field) + 1
+                continue
 
             try:
-                ignore_field = ['loop', 'include', 'block', 'randseq']
-                ignore_modifier = ['bits', 'bit']
+               # Parse using struct
+                fmt = f"{endianess}{field_type}"
+                field_size = struct.calcsize(fmt)
 
-                if (field_name not in ignore_field) and not (any(field_type.startswith(prefix) for prefix in ignore_modifier)):
-                    fmt = f"{endianess}{field_type}" 
-                    field_size = struct.calcsize(fmt)
-            except struct.error:
-                    if debug:
-                        print(f"Error calculating size for format: {fmt}")
-                    continue
-            try:
-                if 'bit' in field_type:
-                    match = re.match(r"bit(\d*)", field_type)
-
-                    if match:
-                        buffer._storage = bytearray(raw_data) 
-                        bit_length = match.group(1) if match.group(1) else 1  
-                        if debug:
-                            print(f"Variable: {field_name}, Bit length: {bit_length}")
-
-                        
-                        field_value = buffer.read_bits_from_offset(bit_length, offset) +1
-                        offset += 1  
-
-
+                # Ignore field (e.g. padding), just advance
+                if field_name.startswith('_'):
+                    print("yes")
                     i += 1
+                    offset += field_size
+
+                    parameters["offset"] = offset
+                    parameters["i"] = i
                     continue
-              
-                elif 'include' in field_name:
-                    pattern = r'<(.*?)>'
-                    match = re.search(pattern, field_type)
 
-                    parsed_loop, offset = WoWStructParser.extract_data(parameters)
-                    # parsed_loop, offset = WoWStructParser.extract_data(raw_data, endianess, block[match.group(1)], metadata, block, offset, just=4, debug=False)
-                    i += len(parsed_loop) + 1
-                    parsed_data.update(parsed_loop)
-                    # print(parsed_data)
-                    continue
-                elif 'loop' in field_name:
-                    loop = int(parsed_data[field_type])                 
-                    loop_fields = fields[i + 1:i + 1 + int(loop_field)]
-                    variable_list = []
-
-                    for x in range(loop):
-                        if debug:
-                            print(f'Loop {x}')
-                        
-                        loop_parameters = parameters
-                        loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4})
-
-                        parsed_loop, offset = WoWStructParser.extract_data(loop_parameters)
-                        variable_list.append(parsed_loop)
-
-                        if offset > len(raw_data):
-                            break
-                    
-                    i += len(loop_fields) + 1
-                    parsed_data[variable_name] = variable_list
-                  
-                    continue
-                elif 'randseq' in field_name:
-                    loop = int(field_type)
-
-                    n = i + 1
-                    randseq_fields = fields[n:n + int(loop_field)]
-
-                    randseq_definition = {}
-
-                    for field in randseq_fields:
-                        print([field[0]])
-                        print([field[1]])
-                        if not '-' in field[1] and ' ' in field[1]:
-                            randseq_definition[field[0]] = [int(x) for x in field[1].split(' ')]
-                        elif  '-' in field[1]:
-                            randseq_definition[field[0]] = tuple(field[1].split('-'))
-                        elif not '-' in field[1]:
-                            randseq_definition[field[0]] = field[1]
-                        elif '><' in field[1]:
-                            print("patters")
-                            pattern = r'<(\w+)><(\w+)>'
-                            match = re.search(pattern, field[1])
-                            print(match)
-
-
-                    print(randseq_definition)
-
-                    parsed_data_randseq = {}
-
-                    for key, value in randseq_definition.items():
-                        if isinstance(value, list):  # Om det är en lista av bytes
-                            parsed_data_randseq[key] = [f"{raw_data[index]:02X}" for index in value]
-                            parsed_data_randseq[key] = "".join(parsed_data_randseq[key])
-                        
-                        elif isinstance(value, tuple):  # Om det är en tuple av start och slut position
-                            start, end = value
-                            parsed_data_randseq[key] = int.from_bytes(raw_data[int(start):int(end)], byteorder='little')
-                    
-                    addon_size = int.from_bytes(raw_data[54:58], byteorder='little')
-                    # print(parsed_data_randseq)
-                    addon_data_start = 58
-
-
-                    addon_data_end = addon_data_start + addon_size
-                    parsed_data_randseq["addon_size"] = addon_size
-                    parsed_data_randseq["addon_data"] = raw_data[addon_data_start:addon_data_end].hex()
-
-                    test = raw_data[addon_data_end:]
-
-                    # Läs en bit
-                    byte_pos = 0
-                    bit_pos = 0
-
-                    # Läs första biten
-                    bit, byte_pos, bit_pos = BitInterPreter.read_bit(test, byte_pos, bit_pos)
-                    # print(f"Bit: {bit}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
-
-                    # parsed_data_randseq["_"] = test[byte_pos + 1:byte_pos + 1 + int(bits)]
-
-
-                    # Läs nästa 11 bitar
-                    bits, byte_pos, bit_pos = BitInterPreter.read_bits(test, byte_pos, bit_pos, 11)
-                    # print(f"Bits: {bits}, New byte_pos: {byte_pos}, New bit_pos: {bit_pos}")
-                    parsed_data_randseq["user_length"] = int(bits)
-
-                    # Hoppa över de första två bytena och skriv ut återstående data
-                    # print(test[byte_pos + 1:byte_pos + 1 + int(bits)])  # Hoppa över 2 byte och skriv ut de 4 återstående
-                    parsed_data_randseq["user"] = test[byte_pos + 1:byte_pos + 1 + int(bits)].decode()
-                    parsed_data.update(parsed_data_randseq)           
-
-                    i += int(loop_field) + 1
-                    continue
-                elif 's' in field_type:
+                # Unpack raw value
+               
+                if 's' in field_type:
                     field_value = struct.unpack_from(fmt, raw_data, offset)[0]
+                    field_value = ModifierInterPreter.to_string_from_bytes(field_value)
                 elif re.match(r'^\d+[A-Za-z]$', field_type):
                     field_value = struct.unpack_from(fmt, raw_data, offset)
-                elif (len(fmt) > 2 and 'C' in metadata.get(field_name, []) and (field_type not in ignore_modifier)): 
+                elif len(fmt) > 2 and 'C' in modifiers.get(field_name, []):
                     field_value = struct.unpack_from(fmt, raw_data, offset)
-
-                    combined = 0
-
-                    for value in field_value:
-                        combined += value
-
-                    field_value = combined
                 else:
-                    if fmt:
-                        field_value = struct.unpack_from(fmt, raw_data, offset)[0]
-            except struct.error as e:
-                if debug:
-                    print(f'Error parsing data: {e}')
-                    print(parsed_data)
-                    print("Continue with next package\n\n")
-                break
+                   field_value = struct.unpack_from(fmt, raw_data, offset)[0]
 
-            if field_name.startswith('_') or field_name.startswith('ignore'):
+
+                if field_name in modifiers:
+                    field_value = ModifierInterPreter.modifier_handler(field_name, field_value, field_type, modifiers)
+                else:
+                    # field_value = field_value if isinstance(field_value, tuple) else field_value
+                    pass
+
+                # Store parsed result
+                parsed_data[field_name] = field_value
+
+                # Optional debug print
+                debug and print(
+                    f"{'':>{just}}Field: {field_name}, Offset: {offset}, Size: {field_size}, "
+                    f"fmt: {fmt}, Data: {raw_data[offset:offset + field_size]}, Parsed: {field_value}"
+                )
+
+                # Advance
                 offset += field_size
                 i += 1
+
+                # Update parser state
+                parameters.update({
+                    "parsed_data": parsed_data,
+                    "offset": offset,
+                    "i": i
+                })
+            except (struct.error, IndexError, KeyError, ValueError) as e:
+                # Advance
+                # offset += field_size
+                # i += 1
+
+                if debug:
+                    print(f"{'':>{just}}[ERROR] Failed to parse field '{field_name}' with fmt '{fmt}': {e}")
                 continue
-                
-            if field_name in metadata:
-                field_value = ModifierInterPreter.modifier_handler(field_name, field_value, field_type, metadata)
-                parsed_data[field_name] = field_value
-            else:
-                if "s" in field_type:
-                    field_value = ModifierInterPreter.to_string_from_bytes(field_value)
-                    parsed_data[field_name] = field_value
-                   
-                else:
-                    parsed_data[field_name] = field_value
-                    
-                            
-            if debug:
-                if just:
-                    print(f"{'':>4}Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
-                else:
-                    print(f"Field: {field_name}, Offset: {offset}, Size: {field_size}, fmt: {fmt}, Data: {raw_data[offset:offset+field_size]}, Parsed: {field_value}")
-            
-            offset += field_size
-            i += 1
 
         return parsed_data, offset
 
@@ -331,33 +272,28 @@ class WoWStructParser:
         print(f"{struct_definition}\n")
 
         struct_definition_list = ParsingUtils.remove_comments_and_reserved(struct_definition)
-
-        parameters = {
-            "endianess": "<",
-            "fields": [],
-            "metadata": {},
-            "block": {},
-            "raw_data": raw_data,  
-            "debug": True,
-            "struct_definition_list": struct_definition_list,
-            "just": 0, 
-            "offset": 0
-        }
-
+        parameters = ParsingUtils.init_parameters(raw_data, struct_definition_list)
         parameters = StructDefintion.parse_struct_definition(parameters)
 
         print(f'Endian: {parameters['endianess']}\n')
         print(f'Fields: {parameters['fields']}\n')
-        print(f'Metadata: {parameters['metadata']}\n')
+        print(f'Modifiers: {parameters['modifiers']}\n')
         print(f'Block: {parameters['block']}\n')
 
         parsed_data, _ = WoWStructParser.extract_data(parameters)
         
-        print()
-        print(f"Raw Data: \n{raw_data}")
-        print(f"Len raw data: {len(raw_data)}")
-        print("\nParsed Data: \n", json.dumps(parsed_data, indent=4))
-        print("\nExpected Output: \n", json.dumps(expected_output, indent=4))
+        try:
+            print()
+            print(f"Raw Data: \n{raw_data}")
+            print(f"Len raw data: {len(raw_data)}")
+            print("\nParsed Data: \n", json.dumps(parsed_data, indent=4))
+            print("\nExpected Output: \n", json.dumps(expected_output, indent=4))
+        except TypeError:
+            print()
+            print(f"Raw Data: \n{raw_data}")
+            print(f"Len raw data: {len(raw_data)}")
+            print("\nParsed Data: \n", parsed_data)
+            print("\nExpected Output: \n", expected_output)
 
         if parsed_data == expected_output:
             print("Match\n\n")
@@ -371,18 +307,7 @@ class WoWStructParser:
         raw_data = FileHandler.load_bin_file(bin_file)
 
         struct_definition_list = ParsingUtils.remove_comments_and_reserved(struct_definition)
-
-        parameters = {
-            "endianess": "<",
-            "fields": [],
-            "metadata": {},
-            "block": {},
-            "raw_data": raw_data,  
-            "debug": False,
-            "struct_definition_list": struct_definition_list,
-            "just": 0, 
-            "offset": 0
-        }
+        parameters = ParsingUtils.init_parameters(raw_data, struct_definition_list)
 
         parameters = StructDefintion.parse_struct_definition(parameters)
         parsed_data, _ = WoWStructParser.extract_data(parameters)

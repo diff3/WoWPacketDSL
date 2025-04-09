@@ -35,8 +35,8 @@ class TestParser(unittest.TestCase):
                 
                 try:
                     self.assertEqual(parsed_data, self.expected_output)
-                    # print(case, end=" ")
-                    # print("PASSED")
+                    print(case, end=" ")
+                    print("PASSED")
                     self.succes += 1
                 except AssertionError as e:
                     print(case, end=" ")
