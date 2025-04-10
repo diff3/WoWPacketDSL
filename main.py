@@ -111,9 +111,7 @@ class WoWStructParser:
             # Check special string cases. ex. variables and terminator
             field_type = ParsingUtils.resolve_string_field_type(field_type, raw_data, offset, parsed_data)
 
-            if 'bit' in field_type:
-                pass
-            elif 'include' in field_name:
+            if 'include' in field_name:
                 parameters = BlockInterPreter.include_handler(parameters)
                 i, offset, parsed_data = get_values(parameters, "i", "offset", "parsed_data")
                 continue
@@ -122,6 +120,8 @@ class WoWStructParser:
                 i, offset, parsed_data = get_values(parameters, "i", "offset", "parsed_data")
                 continue                    
             elif 'randseq' in field_name:
+                pass
+
                 loop = int(field_type)
 
                 n = i + 1
@@ -130,8 +130,6 @@ class WoWStructParser:
                 randseq_definition = {}
 
                 for field in randseq_fields:
-                    print([field[0]])
-                    print([field[1]])
                     if not '-' in field[1] and ' ' in field[1]:
                         randseq_definition[field[0]] = [int(x) for x in field[1].split(' ')]
                     elif  '-' in field[1]:
@@ -139,13 +137,9 @@ class WoWStructParser:
                     elif not '-' in field[1]:
                         randseq_definition[field[0]] = field[1]
                     elif '><' in field[1]:
-                        print("patters")
                         pattern = r'<(\w+)><(\w+)>'
                         match = re.search(pattern, field[1])
-                        print(match)
 
-
-                print(randseq_definition)
 
                 parsed_data_randseq = {}
 
@@ -159,7 +153,6 @@ class WoWStructParser:
                         parsed_data_randseq[key] = int.from_bytes(raw_data[int(start):int(end)], byteorder='little')
                 
                 addon_size = int.from_bytes(raw_data[54:58], byteorder='little')
-                # print(parsed_data_randseq)
                 addon_data_start = 58
 
 
@@ -190,7 +183,7 @@ class WoWStructParser:
                 parsed_data_randseq["user"] = test[byte_pos + 1:byte_pos + 1 + int(bits)].decode()
                 parsed_data.update(parsed_data_randseq)           
 
-                i += int(loop_field) + 1
+                i += int(loop) + 1
                 continue
 
             try:
@@ -200,16 +193,12 @@ class WoWStructParser:
 
                 # Ignore field (e.g. padding), just advance
                 if field_name.startswith('_'):
-                    print("yes")
                     i += 1
                     offset += field_size
-
-                    parameters["offset"] = offset
-                    parameters["i"] = i
+                    parameters.update({"offset": offset, "i": i})
                     continue
 
                 # Unpack raw value
-               
                 if 's' in field_type:
                     field_value = struct.unpack_from(fmt, raw_data, offset)[0]
                     field_value = ModifierInterPreter.to_string_from_bytes(field_value)
@@ -217,17 +206,28 @@ class WoWStructParser:
                     field_value = struct.unpack_from(fmt, raw_data, offset)
                 elif len(fmt) > 2 and 'C' in modifiers.get(field_name, []):
                     field_value = struct.unpack_from(fmt, raw_data, offset)
+  
                 else:
                    field_value = struct.unpack_from(fmt, raw_data, offset)[0]
 
+                # print(f'field_name: {field_name}, fmt: {fmt}, field_value: {field_value}, field_type: {field_type}')
+
 
                 if field_name in modifiers:
-                    field_value = ModifierInterPreter.modifier_handler(field_name, field_value, field_type, modifiers)
-                else:
-                    # field_value = field_value if isinstance(field_value, tuple) else field_value
-                    pass
+                    bit_context = {
+                        "raw_data": parameters["raw_data"],
+                        "byte_pos": parameters["offset"],
+                        "bit_pos": parameters["bit_pos"]
+                    }
 
-                # Store parsed result
+                    field_value, byte_pos, bit_pos = ModifierInterPreter.modifier_handler(
+                        field_name, field_value, field_type, modifiers, bit_context
+                    )
+
+                    parameters["byte_pos"] = byte_pos
+                    parameters["bit_pos"] = bit_pos
+
+
                 parsed_data[field_name] = field_value
 
                 # Optional debug print
@@ -236,23 +236,35 @@ class WoWStructParser:
                     f"fmt: {fmt}, Data: {raw_data[offset:offset + field_size]}, Parsed: {field_value}"
                 )
 
-                # Advance
-                offset += field_size
+                if i + 1 < len(fields):
+                    next_field_name = fields[i + 1][0]
+                    next_mods = modifiers.get(next_field_name, [])
+                else:
+                    next_mods = []
+                
+                if not any(m.endswith("B") for m in next_mods):
+                    if not any(m.endswith("B") for m in modifiers):
+                        offset = parameters["offset"] + parameters["byte_pos"] + field_size
+                        parameters["bit_pos"] = 0
+                        parameters["byte_pos"] = 0
+                    else:
+                        offset += field_size
+
+                    parameters["offset"] = offset
+                else:
+                    pass
+
                 i += 1
 
-                # Update parser state
+
                 parameters.update({
                     "parsed_data": parsed_data,
-                    "offset": offset,
                     "i": i
                 })
             except (struct.error, IndexError, KeyError, ValueError) as e:
-                # Advance
-                # offset += field_size
-                # i += 1
-
-                if debug:
-                    print(f"{'':>{just}}[ERROR] Failed to parse field '{field_name}' with fmt '{fmt}': {e}")
+                offset += field_size
+                i += 1
+                print(f"{'':>{just}}[ERROR] Failed to parse field '{field_name}' with fmt '{fmt}': {e}")
                 continue
 
         return parsed_data, offset

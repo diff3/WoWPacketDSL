@@ -14,6 +14,7 @@ class BlockInterPreter:
         result = ParsingUtils.count_size_of_block_structure(lines, i)
         num = result[0]
         block_lines = result[1]
+        debug = False
 
         loop_match = re.match(r"block <(\w+)>:", lines[i].strip())
 

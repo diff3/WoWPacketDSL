@@ -52,7 +52,9 @@ class ParsingUtils:
             "just": 0, 
             "offset": 0,
             "parsed_data": {},
-            "i": 0
+            "i": 0,
+            "bit_pos": 0,
+            "byte_pos": 0
         }
 
     @staticmethod   

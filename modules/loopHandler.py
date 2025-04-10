@@ -39,6 +39,7 @@ class LoopInterPreter:
         from main import WoWStructParser
 
         fields, raw_data, debug, offset, parsed_data, i = get_values(parameters, "fields", "raw_data", "debug", "offset", "parsed_data", "i")
+
         _, field_type, variable_name, loop_field = fields[i]
 
         loop = int(parsed_data[field_type])             

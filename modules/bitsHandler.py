@@ -6,7 +6,18 @@ class BitInterPreter:
     """
     Class to read bits from a byte array.
     """
-    
+
+    @staticmethod
+    def from_bits(data: bytes, byte_pos: int, bit_pos: int, num_bits: int) -> tuple:
+        """
+        Reads bits and returns a list of individual bits, plus updated positions.
+        """
+        value, byte_pos, bit_pos = BitInterPreter.read_bits(data, byte_pos, bit_pos, num_bits)
+
+        # Konvertera till lista av bitar (MSB → LSB)
+        bits = [(value >> i) & 1 for i in reversed(range(num_bits))]
+        return bits, byte_pos, bit_pos
+
     @staticmethod
     def read_bit(data: bytes, byte_pos: int, bit_pos: int) -> tuple:
         """

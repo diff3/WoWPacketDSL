@@ -29,7 +29,7 @@ class TestParser(unittest.TestCase):
 
                 with open(f"build/18414/json/{case}.json", "r") as f:
                     self.expected_output = json.load(f)
-
+                  
                 self.expected_output = json.dumps(self.expected_output)
                 self.ant += 1
                 
