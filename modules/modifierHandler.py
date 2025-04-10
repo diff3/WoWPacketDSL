@@ -132,6 +132,12 @@ class ModifierInterPreter:
         return combined
     
     @staticmethod
+    def to_capitalized(value):
+        if isinstance(value, str):
+            return value.capitalize()
+        return value
+    
+    @staticmethod
     def to_int(field_value):
         """
         Converts a list of bits to an integer. If already an int, return as-is.
@@ -183,6 +189,12 @@ class ModifierInterPreter:
         return field_value 
     
     @staticmethod
+    def to_trimmed(value):
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @staticmethod
     def to_string(field_value):
         if isinstance(field_value, str): 
             return field_value.decode("utf-8").strip("\x00")
@@ -200,13 +212,15 @@ class ModifierInterPreter:
 
 
 modifiers_opereration_mapping = {
+    "B": BitInterPreter.from_bits,
+    "C": ModifierInterPreter.combine_data,
     "H": ModifierInterPreter.to_hex,
+    "I": ModifierInterPreter.to_int,
     "M": ModifierInterPreter.to_mirror,
-    "s": ModifierInterPreter.to_string,
-    "u": ModifierInterPreter.to_lower,
+    "N": ModifierInterPreter.to_capitalized,
     "U": ModifierInterPreter.to_upper,
     "W": ModifierInterPreter.to_ip_address,
-    "C": ModifierInterPreter.combine_data,
-    "B": BitInterPreter.from_bits,
-    "I": ModifierInterPreter.to_int,
+    "s": ModifierInterPreter.to_string,
+    "t": ModifierInterPreter.to_trimmed,
+    "u": ModifierInterPreter.to_lower
 }

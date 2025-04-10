@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import re
-from utils.parseUtils import ParsingUtils
-
-from utils.parseUtils import get_values
+from utils.parseUtils import ParsingUtils, get_values
 
 class LoopInterPreter:
 

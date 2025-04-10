@@ -8,7 +8,6 @@ data:
         client_build: 46-48
         addon_size: 54-58
         addon_data_start: 58
-        addon_data: <addon_data_start><addon_data_size>
-    # _: bit
-    # user_length: bits11
-    # user: <user_length>s
+    _addon_data: <addon_data_start><addon_data_size>
+    _len_user: B, BI
+    _user: <_len_user>s
