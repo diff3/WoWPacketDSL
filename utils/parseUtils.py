@@ -285,6 +285,12 @@ class ParsingUtils:
 
         lines = [json.dumps(item) for item in items]
         return "[\n  " + ",\n  ".join(lines) + "\n]"
+
+    @staticmethod
+    def check_endian(line):
+        endian_type = line.split(":")[1].strip()
+        return "<" if endian_type == "little" else ">"
+  
         
 
 get_values = ParsingUtils.get_values

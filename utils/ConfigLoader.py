@@ -34,3 +34,8 @@ class ConfigLoader:
                 raise RuntimeError(f"Error parsing YAML file: {e}")
         
         return ConfigLoader._config
+
+    @staticmethod
+    def reload_config(filepath: str = "etc/config.yaml"):
+        ConfigLoader._config = None
+        return ConfigLoader.load_config(filepath)

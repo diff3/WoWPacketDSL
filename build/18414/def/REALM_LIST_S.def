@@ -1,11 +1,3 @@
-block €test:
-   characters: B
-   timezone: B
-
-block €test23:
-   realmid: B
-
-
 endian: little
 header:
    cmd: B

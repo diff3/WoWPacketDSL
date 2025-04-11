@@ -16,10 +16,17 @@ from utils.fileUtils import FileHandler
 from utils.parseUtils import ParsingUtils, extract_struct_field, apply_modifiers
 from modules.context import get_context
 
+from utils.ConfigLoader import ConfigLoader
+from utils.Logger import Logger
+
+# GLOBALS
+config = ConfigLoader.load_config()
+
 """
 TODO: Fix komma åt alla variabler, även i och utanför ex. looper
 TODO: Fix randseq
 """
+
 
 class StructDefintion:
     @staticmethod
@@ -39,7 +46,7 @@ class StructDefintion:
             debug and print(f"[DEBUG] Line {i}: {lines[i]}")
           
             if line.startswith("endian:"):
-                endianess = StructDefintion.check_endian(line)
+                endianess = ParsingUtils.check_endian(line)
                 ctx.endianess = endianess
                 i += 1
                 continue
@@ -77,11 +84,6 @@ class StructDefintion:
             
             i += 1
 
-    @staticmethod
-    def check_endian(line):
-        endian_type = line.split(":")[1].strip()
-        return "<" if endian_type == "little" else ">"
-    
 
 class WoWStructParser:
     """ 
@@ -143,10 +145,14 @@ class WoWStructParser:
                 parsed_data[field_name] = field_value
                 
                 # Optional debug print
-                debug and print(
+                # debug and print(
+                  #  f"{'':>{just}}Field: {field_name}, Offset: {offset}, Size: {field_size}, "
+                   # f"fmt: {fmt}, Data: {raw_data[offset:offset + field_size]}, Parsed: {field_value}"
+               # )
+
+                Logger.debug( 
                     f"{'':>{just}}Field: {field_name}, Offset: {offset}, Size: {field_size}, "
-                    f"fmt: {fmt}, Data: {raw_data[offset:offset + field_size]}, Parsed: {field_value}"
-                )
+                    f"fmt: {fmt}, Data: {raw_data[offset:offset + field_size]}, Parsed: {field_value}")
 
                 if i + 1 < len(fields):
                     next_field_name = fields[i + 1][0]
@@ -171,7 +177,7 @@ class WoWStructParser:
             except (struct.error, IndexError, KeyError, ValueError) as e:
                 offset += field_size
                 i += 1
-                print(f"{'':>{just}}[ERROR] Failed to parse field '{field_name}' with fmt '{fmt}': {e}")
+                Logger.error(f"{'':>{just}}[ERROR] Failed to parse field '{field_name}' with fmt '{fmt}': {e}")
                 continue
 
         return parsed_data, offset
@@ -188,6 +194,8 @@ class WoWStructParser:
         expected_output = FileHandler.load_json_file(json_file)
 
         print(case)
+        Logger.info(case)
+        # print(case)
 
         struct_definition_list = ParsingUtils.remove_comments_and_reserved(struct_definition)
         # print(f"{ json.dumps(struct_definition_list,indent=4)}\n")
@@ -221,7 +229,7 @@ class WoWStructParser:
             print("\nExpected Output: \n", expected_output)
 
         if parsed_data == expected_output:
-            print("Match\n\n")
+            Logger.success("Match\n\n")
         
     @staticmethod
     def parse_case_unittest(version, case):
@@ -247,6 +255,8 @@ class WoWStructParser:
 
 if __name__ == "__main__":
 
+    Logger.reset_log()
+    
     version = sys.argv[1] if len(sys.argv) > 1 else "18414"
     case = sys.argv[2] if len(sys.argv) > 2 else None
 

@@ -46,7 +46,6 @@ class Logger:
             'Error': DebugLevel.ERROR,
             'Debug': DebugLevel.DEBUG,
             'Script': DebugLevel.SCRIPT,
-            'Package': DebugLevel.PACKAGE, 
             'All': DebugLevel.ALL
         }
         mask = DebugLevel.NONE
@@ -77,6 +76,12 @@ class Logger:
 
         with open(f'logs/{file}', 'a') as log_file:
             log_file.write(formatted_msg + '\n')
+
+    @staticmethod
+    def reset_log(file=None):
+        if not file:
+            file = config['Logging']['log_file']
+        open(f'logs/{file}', 'w').close()
 
     @staticmethod
     def debug(msg):
