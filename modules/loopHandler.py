@@ -5,6 +5,7 @@ import re
 from utils.parseUtils import ParsingUtils, get_values
 
 from modules.context import get_context
+from utils.Logger import Logger
 
 class LoopInterPreter:
 
@@ -48,8 +49,7 @@ class LoopInterPreter:
         variable_list = []
 
         for x in range(loop):
-            if debug:
-                print(f'Loop {x}')
+            Logger.debug(f'Loop {x}')
             
             loop_ctx = ctx.clone()
             loop_ctx.fields = loop_fields

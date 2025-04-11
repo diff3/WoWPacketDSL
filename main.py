@@ -43,7 +43,7 @@ class StructDefintion:
 
         while i < len(lines):
             line = lines[i].strip()
-            debug and print(f"[DEBUG] Line {i}: {lines[i]}")
+            # debug and print(f"[DEBUG] Line {i}: {lines[i]}")
           
             if line.startswith("endian:"):
                 endianess = ParsingUtils.check_endian(line)
@@ -256,7 +256,7 @@ class WoWStructParser:
 if __name__ == "__main__":
 
     Logger.reset_log()
-    
+
     version = sys.argv[1] if len(sys.argv) > 1 else "18414"
     case = sys.argv[2] if len(sys.argv) > 2 else None
 
