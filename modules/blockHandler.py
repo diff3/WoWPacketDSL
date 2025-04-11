@@ -4,7 +4,7 @@
 import re
 from utils.parseUtils import ParsingUtils
 from utils.parseUtils import get_values
-
+from modules.context import get_context
 
 
 class BlockInterPreter:
@@ -16,7 +16,9 @@ class BlockInterPreter:
         block_lines = result[1]
         debug = False
 
-        loop_match = re.match(r"block <(\w+)>:", lines[i].strip())
+
+
+        loop_match = re.match(r"block\s+€(\w+):", lines[i].strip())
 
         variable_list = []
 
@@ -24,60 +26,57 @@ class BlockInterPreter:
             variable = loop_match.group(1)
 
             for b in block_lines:
+              
                 try:
                     field_name, field_type = b.split(":")
                     variable_list.append((field_name.strip(), field_type.strip()))
-                    num += 1
                 except ValueError as e:
                     if debug:
                         print(f"Value error: {e}")
                         print(lines[i])
 
+            num += 1
             return variable, variable_list, num
         
         return None
 
 
     @staticmethod
-    def include_handler(parameters: dict) -> dict:
+    def include_handler():
         from main import WoWStructParser
-        fields, block, i, offset = get_values(parameters, "fields", "block", "i", "offset")
+        
+        ctx = get_context()
+        fields, block, i, offset = ctx.get_values("fields", "block", "i", "offset")
 
-        # Extrahera fältets namn
-        field_name = fields[i][0]
+        # Läs field entry: ("include", "€blockname")
+        field_type = fields[i][1]  # ex: "€test"
 
-        # Försök hitta inkluderingsmönster, t.ex. <LoopName>
-        pattern = r'<(.*?)>'
-        match = re.search(pattern, field_name)
+        # Matcha €blockname
+        match = re.match(r"^€(\w+)$", field_type)
         if not match:
-            raise ValueError(f"Fältet '{field_name}' matchade inte förväntat <name>-mönster.")
+            raise ValueError(f"Invalid include syntax: '{field_type}'")
 
-        key = match.group(1)
-        if key not in block:
-            raise KeyError(f"Nyckeln '{key}' finns inte i blocket.")
+        block_name = match.group(1)
 
-        # Bygg upp nya parameters för inkluderad loop
-        include_parameters = parameters.copy()
-        include_parameters.update({
-            'fields': block[key],
-            'parsed_data': {},
-            'i': 0
-        })
+        if block_name not in block:
+            raise KeyError(f"Block '{block_name}' not found in ctx.block.")
 
-        # Kör extraktion
-        parsed_loop, offset = WoWStructParser.extract_data(include_parameters)
+        loop_ctx = ctx.clone()
+        loop_ctx.fields = block[block_name]
+        loop_ctx.offset = offset
+        loop_ctx.i = 0
+        loop_ctx.parsed_data = {}
 
-        # Uppdatera index (vi räknar med en rad per iteration + loopen)
-        i += len(parsed_loop) + 1
 
-        # Debugutskrift
-        print(f"[include_handler] Parsed loop ({key}): {parsed_loop}")
 
-        # Uppdatera ursprungliga parametrar
-        parameters['parsed_data'].update(parsed_loop)
-        parameters.update({
-            "i": i,
-            "offset": offset
-        })
+        # Kör tolkning av det inkluderade blocket
+        parsed_data, offset = WoWStructParser.extract_data(ctx=loop_ctx)
 
-        return parameters
+        # Uppdatera det globala parsed_data med det från blocket
+        ctx.parsed_data.update(parsed_data)
+
+        ctx.i = i
+        ctx.offset = offset
+
+        # Debug
+        print(f"[include_handler] Included block '{block_name}' →", parsed_data)

@@ -1,10 +1,18 @@
+block €test:
+   characters: B
+   timezone: B
+
+block €test23:
+   realmid: B
+
+
 endian: little
 header:
-   cmd: B 
+   cmd: B
    size: H
    realm_list_size: IH, C
 data: 
-   loop <realm_list_size> as <realmlist>:
+   loop €realm_list_size to €realmlist:
       icon: B
       lock: B
       flag: B  

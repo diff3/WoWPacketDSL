@@ -4,6 +4,8 @@
 import re
 from utils.parseUtils import ParsingUtils, get_values
 
+from modules.context import get_context
+
 class LoopInterPreter:
 
     @staticmethod
@@ -16,27 +18,27 @@ class LoopInterPreter:
         
         result = ParsingUtils.count_size_of_block_structure(lines, i)
         num = result[0]
-        # block_lines = result[1]
-        
-        loop_match = re.match(r"loop <(.*?)> as <(\w+)>:", lines[i].strip())
+
+        line = lines[i].strip()
+
+        # Match: loop <number or variable> to €<target>
+        loop_match = re.match(r"loop\s+(?:€)?(\w+)\s+to\s+€(\w+)", line)
 
         if loop_match:
-            loop_count_variable = loop_match.group(1)
-            field_name = loop_match.group(2)
+            loop_count_variable = loop_match.group(1)  # string, may be digit or variable
+            field_name = loop_match.group(2)          # target name (always a variable)
 
-        loop_match = re.match(r"loop (\d+) as <(\w+)>:", lines[i].strip())
+            return ("loop", loop_count_variable, field_name, num)
 
-        if loop_match:
-            loop_count_variable = loop_match.group(1)
-            field_name = loop_match.group(2)
-
-        return ("loop", loop_count_variable, field_name ,num)
+        # If no match, raise error or fallback as needed
+        raise ValueError(f"Invalid loop syntax: {line}")
 
     @staticmethod
-    def extractor(parameters: dict) -> dict:
+    def extractor():
         from main import WoWStructParser
 
-        fields, raw_data, debug, offset, parsed_data, i = get_values(parameters, "fields", "raw_data", "debug", "offset", "parsed_data", "i")
+        ctx = get_context()
+        fields, raw_data, debug, offset, parsed_data, i = ctx.get_values("fields", "raw_data", "debug", "offset", "parsed_data", "i")
 
         _, field_type, variable_name, loop_field = fields[i]
 
@@ -49,10 +51,14 @@ class LoopInterPreter:
             if debug:
                 print(f'Loop {x}')
             
-            loop_parameters = parameters.copy()
-            loop_parameters.update({'fields': loop_fields, 'offset': offset, 'just': 4, 'i': 0, 'parsed_data': {}})
+            loop_ctx = ctx.clone()
+            loop_ctx.fields = loop_fields
+            loop_ctx.offset = offset
+            loop_ctx.just = 4
+            loop_ctx.i = 0
+            loop_ctx.parsed_data = {}
 
-            parsed_loop, offset = WoWStructParser.extract_data(loop_parameters)
+            parsed_loop, offset = WoWStructParser.extract_data(ctx=loop_ctx)
 
             variable_list.append(parsed_loop)
 
@@ -60,13 +66,7 @@ class LoopInterPreter:
                 break
         
         i += len(loop_fields) + 1
-        parameters["parsed_data"][variable_name] = variable_list
 
-        parameters.update({
-            "i": i,
-            "offset": offset
-        })
-
-        return parameters
-        
-        
+        ctx.i = i
+        ctx.offset = offset
+        ctx.parsed_data[variable_name] = variable_list

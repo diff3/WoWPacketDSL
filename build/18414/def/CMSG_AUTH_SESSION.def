@@ -1,13 +1,13 @@
 endian: little
 header:
 data:
-    randseq 58 as <auth>:
+    randseq 58 as €auth:
         digest: 14 52 27 12 13 43 44 49 45 28 53 19 29 50 11 51 42 48 10 24
         virtual_realm_id: 15-19
         client_seed: 20-24
         client_build: 46-48
         addon_size: 54-58
-        addon_data_start: 58
-    _addon_data: <addon_data_start><addon_data_size>
-    _len_user: B, BI
-    _user: <_len_user>s
+    addon_data_start: 58
+    addon_data: €addon_data_start:€addon_data_start+€addon_data_size
+    len_user: B, BI
+    user: €_len_user's

@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import re
-from utils.parseUtils import ParsingUtils, get_values
+from utils.parseUtils import ParsingUtils, get_values, resolve_euro
 from modules.bitsHandler import BitInterPreter
-
+from modules.context import get_context
 
 class RandseqInterPreter:
 
@@ -14,44 +14,68 @@ class RandseqInterPreter:
         result = ParsingUtils.count_size_of_block_structure(lines, i)
 
         num = result[0]
-        block_lines = result[1]
+        # block_lines = result[1]
         
-        loop_match = re.match(r"randseq (\d+) as <(\w+)>:", lines[i].strip())
+        line = lines[i].strip()
+        # loop_match = re.match(r"randseq (\d+) as <(\w+)>:", lines[i].strip())
+        match = re.match(r"randseq\s+(?:€)?(\w+)\s+as\s+€(\w+)", line)
 
-        if loop_match:
-            length_in_bytes = loop_match.group(1)
-            variable_name = loop_match.group(2)
+
+        if match:
+            length_in_bytes = match.group(1)
+            variable_name = match.group(2)
         
             return ("randseq", length_in_bytes, variable_name, num)
 
         return None
 
     @staticmethod
-    def extractor(parameters: dict) -> dict:
-        fields, raw_data, debug, offset, parsed_data, i = get_values(parameters, "fields", "raw_data", "debug", "offset", "parsed_data", "i")
-        print(fields[i])
-        # _, field_type = fields[i]
-        _, field_type, variable_name, loop_field = fields[i]
+    def extractor():
+        ctx = get_context()
+        fields, raw_data, offset, parsed_data, i = ctx.get_values("fields", "raw_data", "offset", "parsed_data", "i")
 
+        field_type = fields[i][1]
         loop = int(field_type)
         len_raw_data = len(raw_data)
 
-
+        # Fälten efter 'randseq ...' blocket
         n = i + 1
-        randseq_fields = fields[n:n + loop]
+        raw_randseq_fields = fields[n:n + loop]
 
         randseq_definition = {}
 
-        for field in randseq_fields:
-            if not '-' in field[1] and ' ' in field[1]:
-                randseq_definition[field[0]] = [int(x) for x in field[1].split(' ')]
-            elif  '-' in field[1]:
-                randseq_definition[field[0]] = tuple(field[1].split('-'))
-            elif not '-' in field[1]:
-                randseq_definition[field[0]] = field[1]
-            elif '><' in field[1]:
-                pattern = r'<(\w+)><(\w+)>'
-                match = re.search(pattern, field[1])
+        # Dela upp varje fält i namn och värde
+        for raw_field in raw_randseq_fields:
+            print(raw_field)
+            if isinstance(raw_field, str):
+                if ':' not in raw_field:
+                    continue  # eller raise ValueError
+                field_name, value = raw_field.split(":", 1)
+            elif isinstance(raw_field, tuple):
+                field_name, value = raw_field
+            else:
+                raise TypeError(f"Unexpected field format: {raw_field}")
+
+            field_name = field_name.strip()
+            value = value.strip()
+
+            # Hantering enligt din DSL
+            if " " in value and not any(op in value for op in "-:+*/"):
+                parts = [int(x) for x in value.split()]
+                randseq_definition[field_name] = parts
+
+            elif "-" in value and not value.startswith("€"):
+                start, end = map(int, value.split("-"))
+                randseq_definition[field_name] = (start, end)
+
+            elif value.isdigit():
+                randseq_definition[field_name] = int(value)
+
+            elif value.startswith("€"):
+                randseq_definition[field_name] = resolve_euro(value, parsed_data)
+
+            else:
+                raise ValueError(f"Unknown value format in randseq: {value}")
 
 
         parsed_data_randseq = {}
@@ -97,17 +121,9 @@ class RandseqInterPreter:
         parsed_data.update(parsed_data_randseq)    
     
         # i += len(loop_fields) + 1
-        # parameters["parsed_data"][variable_name] = variable_list
 
         i += int(loop) + 1
         offset += len_raw_data
 
-
-        parameters.update({
-           "i": i,
-           "offset": offset
-        })
-
-        return parameters
-        
-        
+        ctx.i = i
+        ctx.offset = offset

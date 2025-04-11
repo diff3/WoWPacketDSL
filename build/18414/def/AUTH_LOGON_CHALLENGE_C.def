@@ -15,4 +15,4 @@ data:
    timezone_bias: I
    ip: 4s, W
    I_len: B
-   I: <I_len>s
+   I: €I_len's

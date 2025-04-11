@@ -18,26 +18,8 @@ class ModifierInterPreter:
         field name and type to the fields list.
 
         Return metadata dict, and fields list
-        
-
-        field_name, field_type = line.split(":")
-        field_type, metadata_info = field_type.split(",")
-        s = ''.join(metadata_info.strip().split(','))
-        
-        if len(s) > 1:
-            for char in s:
-                char = char.strip()
-                if field_name.strip() in metadata:
-                    metadata[field_name.strip()].append(char)
-                else:
-                    metadata[field_name.strip()] = [char]
-        else:
-            metadata[field_name.strip()] = [metadata_info.strip()]
-        
-        fields.append((field_name.strip(), field_type.strip()))
-
-        return metadata, fields"""
-
+        """
+      
         field_name, field_type = line.split(":")
         field_type, metadata_info = field_type.split(",")
 
@@ -55,7 +37,7 @@ class ModifierInterPreter:
                     i += match.end()
                 else:
                     # Enstaka bokstav (modifier), eller bokstav efter siffra (t.ex. 8X → X)
-                    if mod[i].isalpha():
+                    if mod[i].isalpha() or mod[i] in "<>":
                         mods.append(mod[i])
                     # ignorera siffror om de inte tillhör en B-modifier
                     i += 1
@@ -75,19 +57,8 @@ class ModifierInterPreter:
         This method first checks if the field's value is of type `bytes` and if the field type is a string (`s`).
         It then decodes the bytes to a string (if possible), or converts it to a hexadecimal string. 
         Next, it applies the modifiers from the metadata to the field value using a mapping of modifier operations.
+        """
         
-
-        if isinstance(field_value, bytes) and ("s" in field_type) and not ('ip' in field_name):
-            try:
-                field_value = field_value.decode("utf-8").strip("\x00")
-            except UnicodeDecodeError:
-                field_value = field_value.hex()
-
-        for modifier in metadata.get(field_name, []):
-            if modifier in modifiers_opereration_mapping:
-                field_value = modifiers_opereration_mapping[modifier](field_value)
-
-        return field_value """
         byte_pos = 0
         bit_pos = 0
 
@@ -120,7 +91,6 @@ class ModifierInterPreter:
                 field_value = modifiers_opereration_mapping[modifier](field_value)
 
         return field_value, byte_pos, bit_pos
-
 
     @staticmethod
     def combine_data(field_value):
@@ -222,5 +192,5 @@ modifiers_opereration_mapping = {
     "W": ModifierInterPreter.to_ip_address,
     "s": ModifierInterPreter.to_string,
     "t": ModifierInterPreter.to_trimmed,
-    "u": ModifierInterPreter.to_lower
+    "u": ModifierInterPreter.to_lower,
 }
